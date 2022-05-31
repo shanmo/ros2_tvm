@@ -37,7 +37,14 @@ pub fn ndarray2_to_cv_8u(a: &nd::Array2<u8>) -> cv::core::Mat {
 }
 
 pub fn preprocess(img: nd::ArrayView3<u8>) -> nd::Array<f32, nd::IxDyn> {
-    let arr = img.clone().mapv(|elem| (elem as f32) / 255.0);
+    let avg = vec![0.485, 0.456, 0.406];
+    let std = vec![0.229, 0.224, 0.225];
+
+    let mut arr = img.clone().mapv(|elem| (elem as f32) / 255.0);
+    for ((x, y, z), value) in arr.indexed_iter_mut() {
+        let temp = (value.clone() - avg[z]) / std[z];
+        *value = temp;
+    }
     let arr = arr.permuted_axes([2, 0, 1]).into_dyn();
     let arr = arr.insert_axis(nd::Axis(0)).to_owned();
     return arr;
@@ -65,6 +72,7 @@ mod tests {
     fn test_segmentation() {
         let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
         let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
+        let original_shape = img.size().unwrap();
         let mut img_rgb = img.clone();
         cv::imgproc::cvt_color(&img,
                                  &mut img_rgb,
@@ -119,9 +127,21 @@ mod tests {
             .unwrap()
             .to_owned();
         let seg_mask = ndarray2_to_cv_8u(&seg_mask);
-        
+        let mut mask = seg_mask.clone();
+        cv::imgproc::resize(
+            &seg_mask,
+            &mut mask,
+            cv::core::Size {
+                width: original_shape.width,
+                height: original_shape.height,
+            },
+            0.,
+            0.,
+            cv::imgproc::INTER_LINEAR,
+        ).unwrap();
+
         cv::highgui::imshow("img", &img).unwrap();
-        cv::highgui::imshow("segmentation", &seg_mask).unwrap();
+        cv::highgui::imshow("segmentation", &mask).unwrap();
         cv::highgui::wait_key(0).unwrap();
     }
 }
