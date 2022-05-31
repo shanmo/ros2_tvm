@@ -128,6 +128,7 @@ mod tests {
         let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
         println!("arr shape {:?}", image_arr.shape());
         let arr = preprocess(image_arr);
+        // println!("input {:?}", arr);
 
         let dev = trt::Device::cpu(0);
 
@@ -156,8 +157,9 @@ mod tests {
             output_nd.dtype()
         );
 
-        let output: Vec<f32> = output_nd.to_vec::<f32>().unwrap();
+        let output: Vec<i32> = output_nd.to_vec::<i32>().unwrap();
         let output: Vec<u8> = output.iter().map(|&e| e as u8).collect();
+        // println!("{:?}", output);
         let seg_mask = nd::Array::from_shape_vec((256, 512), output)
             .unwrap()
             .to_owned();
