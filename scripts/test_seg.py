@@ -13,7 +13,7 @@ import torchvision
 from torch.utils.data import DataLoader
 from Unet import UnetResNet
 
-from tvm_funcs import get_tvm_model, tune, time_it
+# from tvm_funcs import get_tvm_model, tune, time_it
 
 def preprocess(loaded):
     # CV loads in BGR, and rcnn expects rgb
@@ -58,6 +58,7 @@ if __name__ == "__main__":
     image = torch.from_numpy(image)
 
     model = get_model()
+    outputs = model(image)
 
     print(f"Converting the model (post-training)...")
     start_time = time.time()
@@ -65,20 +66,22 @@ if __name__ == "__main__":
     print(f"Quantization done in {str(time.time() - start_time)} seconds.")
     torch.save(quantized.state_dict(), "/home/sean/workspace/ros2_tvm/model/quantized.pth")
 
+    # model = torch.jit.trace(model, image)
+
     # print("PyTorch (unquantized) timings:")
-    # print(time_it(lambda: mobilenet(image)))
+    # print(time_it(lambda: model(image)))
     #
     # print("PyTorch (quantized) timings:")
     # print(time_it(lambda: quantized_mobilenet(image)))
 
-    # tvm part
-    mod, params, module, lib = get_tvm_model(quantized, image)
-    # tvm_optimized_module = tune(mod, params, image)
-
-    # save and load the code and lib file.
-    dir = "/home/sean/workspace/ros2_tvm/model/"
-    path_lib = os.path.join(dir, "segmentation_lib.so")
-    lib.export_library(path_lib)
+    # # tvm part
+    # mod, params, module, lib = get_tvm_model(quantized, image)
+    # # tvm_optimized_module = tune(mod, params, image)
+    #
+    # # save and load the code and lib file.
+    # dir = "/home/sean/workspace/ros2_tvm/model/"
+    # path_lib = os.path.join(dir, "segmentation_lib.so")
+    # lib.export_library(path_lib)
 
     # print("TVM (Relay) timings:")
     # print(time_it(lambda: module.run()))
