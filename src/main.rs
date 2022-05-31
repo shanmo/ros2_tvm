@@ -36,6 +36,22 @@ pub fn ndarray2_to_cv_8u(a: &nd::Array2<u8>) -> cv::core::Mat {
     }
 }
 
+pub fn ndarray3_to_cv2_8u(data: &nd::Array3<u8>) -> cv::core::Mat {
+    // assert the 3rd dimension is exactly 3
+    assert_eq!(data.shape()[2], 3);
+    // transforms an Array3 into a opencv Mat data type.
+    unsafe {
+        cv::core::Mat::new_rows_cols_with_data(
+            data.shape()[0] as i32,
+            data.shape()[1] as i32,
+            cv::core::CV_8UC3,
+            std::mem::transmute(data.as_ptr()),
+            cv::core::Mat_AUTO_STEP,
+        )
+            .unwrap()
+    }
+}
+
 pub fn preprocess(img: nd::ArrayView3<u8>) -> nd::Array<f32, nd::IxDyn> {
     let avg = vec![0.485, 0.456, 0.406];
     let std = vec![0.229, 0.224, 0.225];
@@ -49,6 +65,25 @@ pub fn preprocess(img: nd::ArrayView3<u8>) -> nd::Array<f32, nd::IxDyn> {
     let arr = arr.insert_axis(nd::Axis(0)).to_owned();
     return arr;
 }
+
+pub fn make_segmentation_visualisation_with_transparency(
+    image_color: &nd::Array3<u8>,
+    seg_mask: &nd::Array2<u8>,
+    color_map: &nd::Array2<u8>,
+) -> nd::Array3<u8> {
+    let mut overlay: nd::Array3<u8> = image_color.clone();
+    let shape = image_color.shape();
+    for i in 0..shape[0] {
+        for j in 0..shape[1] {
+            for k in 0..3 {
+                overlay[[i, j, k]] =
+                    overlay[[i, j, k]] / 2 + color_map[[seg_mask[[i, j]] as usize, k]] / 2;
+            }
+        }
+    }
+    overlay
+}
+
 
 fn main() {
     println!("Hello, world!");
@@ -90,9 +125,9 @@ mod tests {
             0.,
             cv::imgproc::INTER_LINEAR,
         ).unwrap();
-        let arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
-        println!("arr shape {:?}", arr.shape());
-        let arr = preprocess(arr);
+        let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
+        println!("arr shape {:?}", image_arr.shape());
+        let arr = preprocess(image_arr);
 
         let dev = trt::Device::cpu(0);
 
@@ -126,11 +161,40 @@ mod tests {
         let seg_mask = nd::Array::from_shape_vec((256, 512), output)
             .unwrap()
             .to_owned();
-        let seg_mask = ndarray2_to_cv_8u(&seg_mask);
-        let mut mask = seg_mask.clone();
-        cv::imgproc::resize(
+
+        let color_map = nd::array![
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [255, 255, 0],
+            [0, 255, 255],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [255, 255, 0],
+            [0, 255, 255],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [255, 255, 0],
+            [0, 255, 255],
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [255, 255, 0],
+            [0, 255, 255],
+        ];
+
+        let image_seg: nd::Array3<u8> = make_segmentation_visualisation_with_transparency(
+            &image_arr.to_owned(),
             &seg_mask,
-            &mut mask,
+            &color_map,
+        );
+        let image_seg: cv::core::Mat = ndarray3_to_cv2_8u(&image_seg);
+        let mut image_vis = image_seg.clone();
+        cv::imgproc::resize(
+            &image_seg,
+            &mut image_vis,
             cv::core::Size {
                 width: original_shape.width,
                 height: original_shape.height,
@@ -140,8 +204,7 @@ mod tests {
             cv::imgproc::INTER_LINEAR,
         ).unwrap();
 
-        cv::highgui::imshow("img", &img).unwrap();
-        cv::highgui::imshow("segmentation", &mask).unwrap();
+        cv::highgui::imshow("segmentation", &image_vis).unwrap();
         cv::highgui::wait_key(0).unwrap();
     }
 }
