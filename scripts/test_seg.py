@@ -11,6 +11,7 @@ from torch import optim
 import torch.nn as nn
 import torchvision
 from torch.utils.data import DataLoader
+from Unet import UnetResNet
 
 from tvm_funcs import get_tvm_model, tune, time_it
 
@@ -28,37 +29,41 @@ class TraceWrapper(torch.nn.Module):
 
     def forward(self, inp):
         def dict_to_tuple(out_dict):
-            return out_dict["out"]
+            output = np.squeeze(out_dict["out"])
+            output_predictions = output.argmax(0)
+            return output_predictions
 
         out = self.model(inp)
         # print(out.keys())
         return dict_to_tuple(out)
 
 def get_model():
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_mobilenet_v3_large', pretrained=True)
-    model = TraceWrapper(model)
+    model = UnetResNet(encoder_name="resnext50",
+                       num_classes=20,
+                       input_channels=3,
+                       num_filters=32,
+                       Dropout=0.2,
+                       res_blocks_dec=False)
+    # model = TraceWrapper(model)
     model.eval()
+
+    model_path = "/home/sean/workspace/ros2_tvm/model/UNET_8x_downsize_all_classes/best_model.pth"
+    state = torch.load(model_path, map_location=lambda storage, loc: storage)
+    model.load_state_dict(state["state_dict"])
     return model
 
 if __name__ == "__main__":
-    # if torch.cuda.is_available():
-    #     dev = "cuda:0"
-    # else:
-    #     dev = "cpu"
-    dev = "cpu"
-
     image = cv2.imread("/home/sean/workspace/ros2_tvm/data/2011_09_26-0056-0000000081-003157.png")
     image = preprocess(image)
-    image = torch.from_numpy(image).to(dev)
+    image = torch.from_numpy(image)
 
-    mobilenet = get_model()
-    mobilenet.to(dev)
+    model = get_model()
 
     print(f"Converting the model (post-training)...")
     start_time = time.time()
-    quantized_mobilenet = torch.quantization.convert(mobilenet)
+    quantized = torch.quantization.convert(model)
     print(f"Quantization done in {str(time.time() - start_time)} seconds.")
-    torch.save(quantized_mobilenet.state_dict(), "/home/sean/workspace/ros2_tvm/model/quantized_model.pth")
+    torch.save(quantized.state_dict(), "/home/sean/workspace/ros2_tvm/model/quantized.pth")
 
     # print("PyTorch (unquantized) timings:")
     # print(time_it(lambda: mobilenet(image)))
@@ -67,7 +72,7 @@ if __name__ == "__main__":
     # print(time_it(lambda: quantized_mobilenet(image)))
 
     # tvm part
-    mod, params, module, lib = get_tvm_model(quantized_mobilenet, image)
+    mod, params, module, lib = get_tvm_model(quantized, image)
     # tvm_optimized_module = tune(mod, params, image)
 
     # save and load the code and lib file.

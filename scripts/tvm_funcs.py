@@ -38,7 +38,8 @@ def time_it(model_func):
 # However, actual model quantization was performed using QAT upstream. Tracing is probably a
 # no-op, but it's hard to know for sure.
 def get_tvm_model(model, X_ex):
-    model = torch.jit.trace(model, X_ex, strict=False)
+    # model = torch.jit.trace(model, X_ex, strict=False)
+    model = torch.jit.trace(model, X_ex)
     mod, params = relay.frontend.from_pytorch(model, input_infos=[('input0', X_ex.shape)])
 
     with tvm.transform.PassContext(opt_level=3):
