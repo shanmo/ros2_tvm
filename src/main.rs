@@ -65,8 +65,24 @@ mod tests {
     fn test_segmentation() {
         let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
         let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
-
-        let arr: nd::ArrayView3<u8> = img.try_as_array().unwrap();
+        let mut img_rgb = img.clone();
+        cv::imgproc::cvt_color(&img,
+                                 &mut img_rgb,
+                                 cv::imgproc::COLOR_BGR2RGB,
+                                 0).unwrap();
+        let mut reduced = img_rgb.clone();
+        cv::imgproc::resize(
+            &img_rgb,
+            &mut reduced,
+            cv::core::Size {
+                width: 512,
+                height: 256,
+            },
+            0.,
+            0.,
+            cv::imgproc::INTER_LINEAR,
+        ).unwrap();
+        let arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
         println!("arr shape {:?}", arr.shape());
         let arr = preprocess(arr);
 
@@ -99,7 +115,7 @@ mod tests {
 
         let output: Vec<f32> = output_nd.to_vec::<f32>().unwrap();
         let output: Vec<u8> = output.iter().map(|&e| e as u8).collect();
-        let seg_mask = nd::Array::from_shape_vec((375, 1242), output)
+        let seg_mask = nd::Array::from_shape_vec((256, 512), output)
             .unwrap()
             .to_owned();
         let seg_mask = ndarray2_to_cv_8u(&seg_mask);
