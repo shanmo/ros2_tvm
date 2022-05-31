@@ -107,7 +107,7 @@ def plot_segmentation(input_img, seg_image):
 if __name__ == "__main__":
     image = cv2.imread("/home/sean/workspace/ros2_tvm/data/2011_09_26-0056-0000000081-003157.png")
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    image = cv2.resize(image, (640, 320))
+    image = cv2.resize(image, (512, 256))
     input_img = torch.from_numpy(image)
 
     model = get_model()
