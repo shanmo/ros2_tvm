@@ -5,6 +5,7 @@ import os
 import time
 import numpy as np
 import cv2
+from matplotlib import pyplot as plt
 
 import torch
 from torch import optim
@@ -15,27 +16,35 @@ from Unet import UnetResNet
 
 # from tvm_funcs import get_tvm_model, tune, time_it
 
-def preprocess(loaded):
-    # CV loads in BGR, and rcnn expects rgb
-    loaded = cv2.cvtColor(loaded, cv2.COLOR_BGR2RGB)
-    img_data = loaded.transpose(2, 0, 1).astype(np.float32)/255.0
-    norm_img_data = np.expand_dims(img_data, axis=0)
-    return norm_img_data
-
 class TraceWrapper(torch.nn.Module):
     def __init__(self, model):
         super().__init__()
         self.model = model
 
     def forward(self, inp):
-        def dict_to_tuple(out_dict):
-            output = np.squeeze(out_dict["out"])
+        def dict_to_tuple(out):
+            output = np.squeeze(out)
             output_predictions = output.argmax(0)
             return output_predictions
 
+        MEAN = torch.tensor([0.485, 0.456, 0.406])
+        STD = torch.tensor([0.229, 0.224, 0.225])
+
+        inp = torch.unsqueeze(inp, 0)
+        # from bgr to rgb
+        # inp = torch.flip(inp, [3])
+        inp = inp.type(torch.float32) / 255.0
+        inp[0, :, :, :] = (inp[0, :, :, :] - MEAN) / STD
+        inp = inp.permute(0, 3, 1, 2)
+
+        original_size = inp.size()
+        input_size = (1, 3, 640, 1280)
+        # inp.resize_(input_size)
+
         out = self.model(inp)
-        # print(out.keys())
-        return dict_to_tuple(out)
+        labels = dict_to_tuple(out)
+        # labels.resize_(original_size[-2:])
+        return labels
 
 def get_model():
     model = UnetResNet(encoder_name="resnext50",
@@ -44,21 +53,67 @@ def get_model():
                        num_filters=32,
                        Dropout=0.2,
                        res_blocks_dec=False)
-    # model = TraceWrapper(model)
     model.eval()
 
     model_path = "/home/sean/workspace/ros2_tvm/model/UNET_8x_downsize_all_classes/best_model.pth"
     state = torch.load(model_path, map_location=lambda storage, loc: storage)
     model.load_state_dict(state["state_dict"])
+    model = TraceWrapper(model)
     return model
+
+def plot_segmentation(input_img, seg_image):
+    num_classes = 20
+
+    fig, axs = plt.subplots(1, 2, figsize=(16, 16))
+
+    images = []
+
+    axs[0].set_title("Image")
+    axs[1].set_title("Prediction")
+
+    # input_img = cv2.cvtColor(input_img, cv2.COLOR_BGR2RGB)
+    images.append(axs[0].imshow(input_img.astype(int)))
+    images.append(axs[1].imshow(seg_image, cmap=plt.get_cmap('nipy_spectral'), vmin=0, vmax=num_classes))
+
+    seg_classes = [
+        "road",
+        "sidewalk",
+        "building",
+        "wall",
+        "fence",
+        "pole",
+        "traffic light",
+        "traffic sign",
+        "vegetation",
+        "terrain",
+        "sky",
+        "person",
+        "rider",
+        "car",
+        "truck",
+        "bus",
+        "train",
+        "motorcycle",
+        "bicycle",
+        "void",
+    ]
+
+    cbar = fig.colorbar(images[1], ax=axs, orientation='horizontal', ticks=[x for x in range(num_classes)], fraction=.1)
+    cbar.ax.set_xticklabels(list(seg_classes), rotation=55)
+
+    plt.show()
+    plt.pause(0)
 
 if __name__ == "__main__":
     image = cv2.imread("/home/sean/workspace/ros2_tvm/data/2011_09_26-0056-0000000081-003157.png")
-    image = preprocess(image)
-    image = torch.from_numpy(image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (640, 320))
+    input_img = torch.from_numpy(image)
 
     model = get_model()
-    outputs = model(image)
+    output = model(input_img)
+
+    plot_segmentation(image, output)
 
     print(f"Converting the model (post-training)...")
     start_time = time.time()
