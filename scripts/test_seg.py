@@ -23,9 +23,13 @@ class TraceWrapper(torch.nn.Module):
 
     def forward(self, inp):
         def dict_to_tuple(out):
-            output = np.squeeze(out)
+            output = torch.squeeze(out)
             output_predictions = output.argmax(0)
-            return output_predictions
+            out = output_predictions[None, None, :].type(torch.uint8)
+            output_shape = (480, 848)
+            m = nn.Upsample(size=output_shape, mode='nearest')
+            out_resized = m(out)
+            return torch.squeeze(out_resized)
 
         out = self.model(inp)
         labels = dict_to_tuple(out)

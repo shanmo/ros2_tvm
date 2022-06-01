@@ -104,6 +104,11 @@ mod tests {
     }
 
     #[test]
+    fn test_detection() {
+
+    }
+
+    #[test]
     fn test_segmentation() {
         let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
         let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
@@ -113,6 +118,20 @@ mod tests {
                                  &mut img_rgb,
                                  cv::imgproc::COLOR_BGR2RGB,
                                  0).unwrap();
+        let mut img_display = img_rgb.clone();
+        cv::imgproc::resize(
+            &img_rgb,
+            &mut img_display,
+            cv::core::Size {
+                width: 848,
+                height: 480,
+            },
+            0.,
+            0.,
+            cv::imgproc::INTER_LINEAR,
+        ).unwrap();
+        let img_display: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
+
         let mut reduced = img_rgb.clone();
         cv::imgproc::resize(
             &img_rgb,
@@ -160,7 +179,7 @@ mod tests {
         let output: Vec<i32> = output_nd.to_vec::<i32>().unwrap();
         let output: Vec<u8> = output.iter().map(|&e| e as u8).collect();
         // println!("{:?}", output);
-        let seg_mask = nd::Array::from_shape_vec((256, 512), output)
+        let seg_mask = nd::Array::from_shape_vec((480, 848), output)
             .unwrap()
             .to_owned();
 
@@ -188,25 +207,13 @@ mod tests {
         ];
 
         let image_seg: nd::Array3<u8> = make_segmentation_visualisation_with_transparency(
-            &image_arr.to_owned(),
+            &img_display.to_owned(),
             &seg_mask,
             &color_map,
         );
         let image_seg: cv::core::Mat = ndarray3_to_cv2_8u(&image_seg);
-        let mut image_vis = image_seg.clone();
-        cv::imgproc::resize(
-            &image_seg,
-            &mut image_vis,
-            cv::core::Size {
-                width: original_shape.width,
-                height: original_shape.height,
-            },
-            0.,
-            0.,
-            cv::imgproc::INTER_LINEAR,
-        ).unwrap();
 
-        cv::highgui::imshow("segmentation", &image_vis).unwrap();
+        cv::highgui::imshow("segmentation", &image_seg).unwrap();
         cv::highgui::wait_key(0).unwrap();
     }
 }
