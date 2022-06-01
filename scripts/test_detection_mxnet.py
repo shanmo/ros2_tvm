@@ -69,6 +69,7 @@ path_lib = os.path.join(dir, "detection_lib.so")
 lib.export_library(path_lib)
 
 bbox = postprocess_bbox(bounding_boxs.numpy()[0])
+print(f"bbox shape {bbox.shape}")
 
 ax = utils.viz.plot_bbox(
     img,

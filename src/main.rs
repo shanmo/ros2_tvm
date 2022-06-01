@@ -105,7 +105,78 @@ mod tests {
 
     #[test]
     fn test_detection() {
+        let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
+        let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
+        let mut img_rgb = img.clone();
+        cv::imgproc::cvt_color(&img,
+                               &mut img_rgb,
+                               cv::imgproc::COLOR_BGR2RGB,
+                               0).unwrap();
+        let mut img_display = img_rgb.clone();
+        cv::imgproc::resize(
+            &img_rgb,
+            &mut img_display,
+            cv::core::Size {
+                width: 848,
+                height: 480,
+            },
+            0.,
+            0.,
+            cv::imgproc::INTER_LINEAR,
+        ).unwrap();
+        let img_display: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
 
+        let ratio = 512.0 / 480.0;
+        let new_width = (848.0 * ratio) as i32;
+        let mut reduced = img_rgb.clone();
+        cv::imgproc::resize(
+            &img_rgb,
+            &mut reduced,
+            cv::core::Size {
+                width: new_width,
+                height: 512,
+            },
+            0.,
+            0.,
+            cv::imgproc::INTER_LINEAR,
+        ).unwrap();
+        let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
+        println!("arr shape {:?}", image_arr.shape());
+        let arr = preprocess(image_arr);
+        // println!("input {:?}", arr);
+
+        let dev = trt::Device::cpu(0);
+
+        let input =
+            trt::NDArray::from_rust_ndarray(&arr, dev, trt::DataType::float(32, 1)).unwrap();
+        println!(
+            "input shape is {:?}, len: {}, size: {}",
+            input.shape(),
+            input.len(),
+            input.size(),
+        );
+
+        // load the built module
+        let lib = trt::Module::load(&Path::new("./model/detection_lib.so")).unwrap();
+        let mut graph_rt = trt::graph_rt::GraphRt::from_module(lib, dev).unwrap();
+        graph_rt.set_input("input0", input).unwrap();
+        graph_rt.run().unwrap();
+
+        // prepare to get the output
+        let labels_nd = graph_rt.get_output(0).unwrap();
+        let scores_nd = graph_rt.get_output(1).unwrap();
+        let bboxes_nd = graph_rt.get_output(2).unwrap();
+
+        let labels: Vec<f32> = labels_nd.to_vec::<f32>().unwrap();
+        let scores: Vec<f32> = scores_nd.to_vec::<f32>().unwrap();
+        let bboxes_flat: Vec<f32> = bboxes_nd.to_vec::<f32>().unwrap();
+        println!("bboxes_flat shape {}", bboxes_flat.len());
+        
+        let bboxes: Vec<Vec<f32>> = bboxes_flat.chunks(4).map(|x| x.to_vec()).collect();
+        // while let Some(&[xmin, ymin, xmax, ymax]) = windows.next() {
+        //     bboxes.push(vec![xmin/ratio, ymin/ratio, xmax/ratio, ymax/ratio]);
+        // }
+        println!("bboxes shape {}", bboxes.len());
     }
 
     #[test]
@@ -145,7 +216,7 @@ mod tests {
             cv::imgproc::INTER_LINEAR,
         ).unwrap();
         let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
-        println!("arr shape {:?}", image_arr.shape());
+        // println!("arr shape {:?}", image_arr.shape());
         let arr = preprocess(image_arr);
         // println!("input {:?}", arr);
 
@@ -153,12 +224,12 @@ mod tests {
 
         let input =
             trt::NDArray::from_rust_ndarray(&arr, dev, trt::DataType::float(32, 1)).unwrap();
-        println!(
-            "input shape is {:?}, len: {}, size: {}",
-            input.shape(),
-            input.len(),
-            input.size(),
-        );
+        // println!(
+        //     "input shape is {:?}, len: {}, size: {}",
+        //     input.shape(),
+        //     input.len(),
+        //     input.size(),
+        // );
 
         // load the built module
         let lib = trt::Module::load(&Path::new("./model/segmentation_lib.so")).unwrap();
@@ -168,13 +239,13 @@ mod tests {
 
         // prepare to get the output
         let output_nd = graph_rt.get_output(0).unwrap();
-        println!(
-            "output shape is {:?}, len: {}, size: {}, dtype {}",
-            output_nd.shape(),
-            output_nd.len(),
-            output_nd.size(),
-            output_nd.dtype()
-        );
+        // println!(
+        //     "output shape is {:?}, len: {}, size: {}, dtype {}",
+        //     output_nd.shape(),
+        //     output_nd.len(),
+        //     output_nd.size(),
+        //     output_nd.dtype()
+        // );
 
         let output: Vec<i32> = output_nd.to_vec::<i32>().unwrap();
         let output: Vec<u8> = output.iter().map(|&e| e as u8).collect();
