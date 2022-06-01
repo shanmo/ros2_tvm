@@ -11,18 +11,6 @@ import mxnet as mx
 import numpy as np
 import cv2, os
 
-supported_model = [
-    "ssd_512_resnet50_v1_voc",
-    "ssd_512_resnet50_v1_coco",
-    "ssd_512_resnet101_v2_voc",
-    "ssd_512_mobilenet1.0_voc",
-    "ssd_512_mobilenet1.0_coco",
-    "ssd_300_vgg16_atrous_voc" "ssd_512_vgg16_atrous_coco",
-]
-
-model_name = supported_model[0]
-dshape = (1, 3, 1242, 375)
-
 def preprocess(image):
     MEAN = np.array([0.485, 0.456, 0.406])
     STD = np.array([0.229, 0.224, 0.225])
@@ -30,27 +18,23 @@ def preprocess(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     image -= MEAN
     image /= STD
-    # image = cv2.resize(image, (512, 512))
+    ratio = 512.0 / 480
+    image = cv2.resize(image, (round(848.0 * ratio), round(480.0 * ratio)))
     image = image.transpose(2, 0, 1)
     image = np.expand_dims(image, 0)
     return image
 
 img = cv2.imread("/home/sean/workspace/ros2_tvm/data/2011_09_26-0056-0000000081-003157.png")
+img = cv2.resize(img, (848, 480))
 input_img = preprocess(img)
+dshape = input_img.shape
 x = mx.nd.array(input_img)
 
-# im_fname = download_testdata(
-#     "https://github.com/dmlc/web-data/blob/main/" + "gluoncv/detection/street_small.jpg?raw=true",
-#     "street_small.jpg",
-#     module="data",
-#     )
-# x, img = data.transforms.presets.ssd.load_test(im_fname, short=512)
-
-block = model_zoo.get_model(model_name, pretrained=True)
-
+model = model_zoo.get_model('faster_rcnn_resnet50_v1b_voc', pretrained=True)
+# model = model_zoo.get_model('center_net_resnet18_v1b_voc', pretrained=True)
 
 def build(target):
-    mod, params = relay.frontend.from_mxnet(block, {"data": dshape})
+    mod, params = relay.frontend.from_mxnet(model, {"data": dshape})
     with tvm.transform.PassContext(opt_level=3):
         lib = relay.build(mod, target, params=params)
     return lib
@@ -66,7 +50,6 @@ def run(lib, dev):
     class_IDs, scores, bounding_boxs = m.get_output(0), m.get_output(1), m.get_output(2)
     return class_IDs, scores, bounding_boxs
 
-
 # for target in ["llvm", "cuda"]:
 for target in ["llvm"]:
     dev = tvm.device(target, 0)
@@ -74,17 +57,25 @@ for target in ["llvm"]:
         lib = build(target)
         class_IDs, scores, bounding_boxs = run(lib, dev)
 
+def postprocess_bbox(bboxes):
+    ratio = 512 / 480
+    bboxes[:, (0, 2)] /= ratio
+    bboxes[:, (1, 3)] /= ratio
+    return bboxes
+
 # save and load the code and lib file.
 dir = "/home/sean/workspace/ros2_tvm/model/"
 path_lib = os.path.join(dir, "detection_lib.so")
 lib.export_library(path_lib)
 
+bbox = postprocess_bbox(bounding_boxs.numpy()[0])
+
 ax = utils.viz.plot_bbox(
     img,
-    bounding_boxs.numpy()[0],
+    bbox,
     scores.numpy()[0],
     class_IDs.numpy()[0],
-    class_names=block.classes,
+    class_names=model.classes,
 )
 plt.show()
 

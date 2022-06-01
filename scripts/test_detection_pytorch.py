@@ -25,7 +25,7 @@ class TraceWrapper(torch.nn.Module):
         return out[0]["boxes"], out[0]["scores"], out[0]["labels"]
 
 def get_model():
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+    model = torchvision.models.detection.ssd300_vgg16(pretrained=True)
     model.eval()
     model = TraceWrapper(model)
     return model
@@ -37,7 +37,7 @@ def preprocess(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     image -= MEAN
     image /= STD
-    image = cv2.resize(image, (512, 256))
+    image = cv2.resize(image, (300, 300))
     image = image.transpose(2, 0, 1)
     image = np.expand_dims(image, 0)
     return image
@@ -64,6 +64,7 @@ if __name__ == "__main__":
     # print(time_it(lambda: quantized(image)))
 
     # tvm part
+    # error TVMError: if is not supported.
     mod, params, module, lib = get_tvm_model(quantized, input_img)
     # tvm_optimized_module = tune(mod, params, image)
 
