@@ -1,7 +1,7 @@
 use anyhow::Result;
+use cv2::prelude::*;
 use ndarray as nd;
-use opencv as cv;
-use opencv::prelude::*;
+use opencv as cv2;
 
 use tvm_rt as trt;
 
@@ -14,7 +14,7 @@ use std::{
 trait AsArray {
     fn try_as_array(&self) -> Result<nd::ArrayView3<u8>>;
 }
-impl AsArray for cv::core::Mat {
+impl AsArray for cv2::core::Mat {
     fn try_as_array(&self) -> Result<nd::ArrayView3<u8>> {
         let bytes = self.data_bytes()?;
         let size = self.size()?;
@@ -23,32 +23,32 @@ impl AsArray for cv::core::Mat {
     }
 }
 
-pub fn ndarray2_to_cv_8u(a: &nd::Array2<u8>) -> cv::core::Mat {
+pub fn ndarray2_to_cv_8u(a: &nd::Array2<u8>) -> cv2::core::Mat {
     unsafe {
-        cv::core::Mat::new_rows_cols_with_data(
+        cv2::core::Mat::new_rows_cols_with_data(
             a.shape()[0] as i32,
             a.shape()[1] as i32,
-            cv::core::CV_8U,
+            cv2::core::CV_8U,
             std::mem::transmute(a.as_ptr()),
-            cv::core::Mat_AUTO_STEP,
+            cv2::core::Mat_AUTO_STEP,
         )
         .unwrap()
     }
 }
 
-pub fn ndarray3_to_cv2_8u(data: &nd::Array3<u8>) -> cv::core::Mat {
+pub fn ndarray3_to_cv2_8u(data: &nd::Array3<u8>) -> cv2::core::Mat {
     // assert the 3rd dimension is exactly 3
     assert_eq!(data.shape()[2], 3);
     // transforms an Array3 into a opencv Mat data type.
     unsafe {
-        cv::core::Mat::new_rows_cols_with_data(
+        cv2::core::Mat::new_rows_cols_with_data(
             data.shape()[0] as i32,
             data.shape()[1] as i32,
-            cv::core::CV_8UC3,
+            cv2::core::CV_8UC3,
             std::mem::transmute(data.as_ptr()),
-            cv::core::Mat_AUTO_STEP,
+            cv2::core::Mat_AUTO_STEP,
         )
-            .unwrap()
+        .unwrap()
     }
 }
 
@@ -84,6 +84,38 @@ pub fn make_segmentation_visualisation_with_transparency(
     overlay
 }
 
+/// convert the BoundingBox to rect in opencv
+// pub fn bbox2rect(bbox: &Vec<f32>) -> cv2::core::Rect {
+//     let rect = cv2::core::Rect {
+//         x: bbox[0] as i32,
+//         y: bbox[1] as i32,
+//         width: (bbox[2] - bbox[0]) as i32,
+//         height: (bbox[3] - bbox[1]) as i32,
+//     };
+//     rect
+// }
+
+pub fn bbox2rect(bbox: &Vec<f32>) -> cv2::core::Rect {
+    let rect = cv2::core::Rect {
+        x: bbox[1] as i32,
+        y: bbox[0] as i32,
+        width: (bbox[3] - bbox[1]) as i32,
+        height: (bbox[2] - bbox[0]) as i32,
+    };
+    rect
+}
+
+/// wrapper function for rectangle
+pub fn plot_rect_cv(
+    image_vis: &mut cv2::core::Mat,
+    rect: cv2::core::Rect,
+    color: cv2::core::Scalar,
+) {
+    const THICKNESS: i32 = 5;
+    const LINE_TYPE: i32 = 8;
+    const SHIFT: i32 = 0;
+    let _ = cv2::imgproc::rectangle(image_vis, rect, color, THICKNESS, LINE_TYPE, SHIFT).unwrap();
+}
 
 fn main() {
     println!("Hello, world!");
@@ -96,52 +128,50 @@ mod tests {
 
     #[test]
     fn test_image() {
-        let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
-        let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
-
-        cv::highgui::imshow("img", &img).unwrap();
-        cv::highgui::wait_key(100).unwrap();
+        // let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
+        // let img = cv2::imgcodecs::imread(&path, cv2::imgcodecs::IMREAD_COLOR).unwrap();
+        //
+        // cv2::highgui::imshow("img", &img).unwrap();
+        // cv2::highgui::wait_key(100).unwrap();
     }
 
     #[test]
     fn test_detection() {
         let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
-        let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
+        let img = cv2::imgcodecs::imread(&path, cv2::imgcodecs::IMREAD_COLOR).unwrap();
         let mut img_rgb = img.clone();
-        cv::imgproc::cvt_color(&img,
-                               &mut img_rgb,
-                               cv::imgproc::COLOR_BGR2RGB,
-                               0).unwrap();
+        cv2::imgproc::cvt_color(&img, &mut img_rgb, cv2::imgproc::COLOR_BGR2RGB, 0).unwrap();
         let mut img_display = img_rgb.clone();
-        cv::imgproc::resize(
+        cv2::imgproc::resize(
             &img_rgb,
             &mut img_display,
-            cv::core::Size {
+            cv2::core::Size {
                 width: 848,
                 height: 480,
             },
             0.,
             0.,
-            cv::imgproc::INTER_LINEAR,
-        ).unwrap();
-        let img_display: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
+            cv2::imgproc::INTER_LINEAR,
+        )
+        .unwrap();
 
         let ratio = 512.0 / 480.0;
         let new_width = (848.0 * ratio) as i32;
-        let mut reduced = img_rgb.clone();
-        cv::imgproc::resize(
+        let mut reduced = img_display.clone();
+        cv2::imgproc::resize(
             &img_rgb,
             &mut reduced,
-            cv::core::Size {
+            cv2::core::Size {
                 width: new_width,
                 height: 512,
             },
             0.,
             0.,
-            cv::imgproc::INTER_LINEAR,
-        ).unwrap();
+            cv2::imgproc::INTER_LINEAR,
+        )
+        .unwrap();
         let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
-        println!("arr shape {:?}", image_arr.shape());
+        // println!("arr shape {:?}", image_arr.shape());
         let arr = preprocess(image_arr);
         // println!("input {:?}", arr);
 
@@ -149,12 +179,12 @@ mod tests {
 
         let input =
             trt::NDArray::from_rust_ndarray(&arr, dev, trt::DataType::float(32, 1)).unwrap();
-        println!(
-            "input shape is {:?}, len: {}, size: {}",
-            input.shape(),
-            input.len(),
-            input.size(),
-        );
+        // println!(
+        //     "input shape is {:?}, len: {}, size: {}",
+        //     input.shape(),
+        //     input.len(),
+        //     input.size(),
+        // );
 
         // load the built module
         let lib = trt::Module::load(&Path::new("./model/detection_lib.so")).unwrap();
@@ -167,54 +197,78 @@ mod tests {
         let scores_nd = graph_rt.get_output(1).unwrap();
         let bboxes_nd = graph_rt.get_output(2).unwrap();
 
+        println!(
+            "output dtype {} {} {}",
+            labels_nd.dtype(),
+            scores_nd.dtype(),
+            bboxes_nd.dtype()
+        );
+
         let labels: Vec<f32> = labels_nd.to_vec::<f32>().unwrap();
+        // println!("labels {:?}", labels);
         let scores: Vec<f32> = scores_nd.to_vec::<f32>().unwrap();
+        // println!("scores {:?}", scores);
         let bboxes_flat: Vec<f32> = bboxes_nd.to_vec::<f32>().unwrap();
-        println!("bboxes_flat shape {}", bboxes_flat.len());
-        
+        // println!("bboxes_flat shape {}", bboxes_flat.len());
         let bboxes: Vec<Vec<f32>> = bboxes_flat.chunks(4).map(|x| x.to_vec()).collect();
-        // while let Some(&[xmin, ymin, xmax, ymax]) = windows.next() {
-        //     bboxes.push(vec![xmin/ratio, ymin/ratio, xmax/ratio, ymax/ratio]);
-        // }
-        println!("bboxes shape {}", bboxes.len());
+        // println!("bboxes shape {}", bboxes.len());
+        let bboxes: Vec<Vec<f32>> = bboxes
+            .iter()
+            .map(|x| x.iter().map(|v| v / ratio).collect())
+            .collect();
+        // println!("bboxes shape {}", bboxes.len());
+
+        for (i, bbox) in bboxes.iter().enumerate() {
+            println!("score {}", scores[i]);
+            println!("label {}", labels[i]);
+            println!("bbox {:?}", bbox);
+            // if scores[i] < 0.3 {
+            //     continue;
+            // }
+            let rect = bbox2rect(bbox);
+            let color = cv2::core::Scalar::new(255f64, 0f64, 0f64, -1f64);
+            plot_rect_cv(&mut img_display, rect, color);
+        }
+
+        cv2::highgui::imshow("detection", &img_display).unwrap();
+        cv2::highgui::wait_key(0).unwrap();
     }
 
     #[test]
     fn test_segmentation() {
         let path = "./data/2011_09_26-0056-0000000081-003157.png".to_string();
-        let img = cv::imgcodecs::imread(&path, cv::imgcodecs::IMREAD_COLOR).unwrap();
+        let img = cv2::imgcodecs::imread(&path, cv2::imgcodecs::IMREAD_COLOR).unwrap();
         let original_shape = img.size().unwrap();
         let mut img_rgb = img.clone();
-        cv::imgproc::cvt_color(&img,
-                                 &mut img_rgb,
-                                 cv::imgproc::COLOR_BGR2RGB,
-                                 0).unwrap();
+        cv2::imgproc::cvt_color(&img, &mut img_rgb, cv2::imgproc::COLOR_BGR2RGB, 0).unwrap();
         let mut img_display = img_rgb.clone();
-        cv::imgproc::resize(
+        cv2::imgproc::resize(
             &img_rgb,
             &mut img_display,
-            cv::core::Size {
+            cv2::core::Size {
                 width: 848,
                 height: 480,
             },
             0.,
             0.,
-            cv::imgproc::INTER_LINEAR,
-        ).unwrap();
+            cv2::imgproc::INTER_LINEAR,
+        )
+        .unwrap();
         let img_display: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
 
         let mut reduced = img_rgb.clone();
-        cv::imgproc::resize(
+        cv2::imgproc::resize(
             &img_rgb,
             &mut reduced,
-            cv::core::Size {
+            cv2::core::Size {
                 width: 512,
                 height: 256,
             },
             0.,
             0.,
-            cv::imgproc::INTER_LINEAR,
-        ).unwrap();
+            cv2::imgproc::INTER_LINEAR,
+        )
+        .unwrap();
         let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
         // println!("arr shape {:?}", image_arr.shape());
         let arr = preprocess(image_arr);
@@ -282,9 +336,9 @@ mod tests {
             &seg_mask,
             &color_map,
         );
-        let image_seg: cv::core::Mat = ndarray3_to_cv2_8u(&image_seg);
+        let image_seg: cv2::core::Mat = ndarray3_to_cv2_8u(&image_seg);
 
-        cv::highgui::imshow("segmentation", &image_seg).unwrap();
-        cv::highgui::wait_key(0).unwrap();
+        // cv2::highgui::imshow("segmentation", &image_seg).unwrap();
+        // cv2::highgui::wait_key(0).unwrap();
     }
 }

@@ -13,6 +13,7 @@ import torch.nn as nn
 import torchvision
 from torch.utils.data import DataLoader
 
+from detr import DETRdemo
 from tvm_funcs import get_tvm_model, tune, time_it
 
 class TraceWrapper(torch.nn.Module):
@@ -22,13 +23,17 @@ class TraceWrapper(torch.nn.Module):
 
     def forward(self, input):
         out = self.model(input)
-        return out[0]["boxes"], out[0]["scores"], out[0]["labels"]
+        return out["pred_logits"], out["pred_boxes"]
 
 def get_model():
-    model = torchvision.models.detection.ssd300_vgg16(pretrained=True)
-    model.eval()
-    model = TraceWrapper(model)
-    return model
+    detr = DETRdemo(num_classes=91)
+    state_dict = torch.hub.load_state_dict_from_url(
+        url='https://dl.fbaipublicfiles.com/detr/detr_demo-da2a99e9.pth',
+        map_location='cpu', check_hash=True)
+    detr.load_state_dict(state_dict)
+    detr.eval()
+    detr = TraceWrapper(detr)
+    return detr
 
 def preprocess(image):
     MEAN = np.array([0.485, 0.456, 0.406])
@@ -37,7 +42,7 @@ def preprocess(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     image -= MEAN
     image /= STD
-    image = cv2.resize(image, (300, 300))
+    image = cv2.resize(image, (512, 512))
     image = image.transpose(2, 0, 1)
     image = np.expand_dims(image, 0)
     return image

@@ -30,8 +30,10 @@ input_img = preprocess(img)
 dshape = input_img.shape
 x = mx.nd.array(input_img)
 
-model = model_zoo.get_model('faster_rcnn_resnet50_v1b_voc', pretrained=True)
-# model = model_zoo.get_model('center_net_resnet18_v1b_voc', pretrained=True)
+# model = model_zoo.get_model('faster_rcnn_resnet50_v1b_voc', pretrained=True)
+model = model_zoo.get_model('center_net_resnet50_v1b_voc', pretrained=True)
+# model = model_zoo.get_model('ssd_512_resnet50_v1_voc', pretrained=True)
+# model = model_zoo.get_model('yolo3_darknet53_voc', pretrained=True)
 
 def build(target):
     mod, params = relay.frontend.from_mxnet(model, {"data": dshape})
@@ -50,12 +52,10 @@ def run(lib, dev):
     class_IDs, scores, bounding_boxs = m.get_output(0), m.get_output(1), m.get_output(2)
     return class_IDs, scores, bounding_boxs
 
-# for target in ["llvm", "cuda"]:
-for target in ["llvm"]:
-    dev = tvm.device(target, 0)
-    if dev.exist:
-        lib = build(target)
-        class_IDs, scores, bounding_boxs = run(lib, dev)
+TARGET = "llvm"
+dev = tvm.device(str(TARGET), 0)
+lib = build(TARGET)
+class_IDs, scores, bounding_boxs = run(lib, dev)
 
 def postprocess_bbox(bboxes):
     ratio = 512 / 480
