@@ -95,12 +95,15 @@ pub fn make_segmentation_visualisation_with_transparency(
 //     rect
 // }
 
+/// convert the BoundingBox to rect in opencv
 pub fn bbox2rect(bbox: &Vec<f32>) -> cv2::core::Rect {
+    let x1 = (bbox[0] - 0.5 * bbox[2]) * 848.0;
+    let y1 = (bbox[1] - 0.5 * bbox[3]) * 480.0;
     let rect = cv2::core::Rect {
-        x: bbox[1] as i32,
-        y: bbox[0] as i32,
-        width: (bbox[3] - bbox[1]) as i32,
-        height: (bbox[2] - bbox[0]) as i32,
+        x: x1 as i32,
+        y: y1 as i32,
+        width: (bbox[2] * 848.0) as i32,
+        height: (bbox[3] * 480.0) as i32,
     };
     rect
 }
@@ -155,22 +158,7 @@ mod tests {
         )
         .unwrap();
 
-        let ratio = 512.0 / 480.0;
-        let new_width = (848.0 * ratio) as i32;
-        let mut reduced = img_display.clone();
-        cv2::imgproc::resize(
-            &img_rgb,
-            &mut reduced,
-            cv2::core::Size {
-                width: new_width,
-                height: 512,
-            },
-            0.,
-            0.,
-            cv2::imgproc::INTER_LINEAR,
-        )
-        .unwrap();
-        let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
+        let image_arr: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
         // println!("arr shape {:?}", image_arr.shape());
         let arr = preprocess(image_arr);
         // println!("input {:?}", arr);
@@ -194,37 +182,44 @@ mod tests {
 
         // prepare to get the output
         let labels_nd = graph_rt.get_output(0).unwrap();
-        let scores_nd = graph_rt.get_output(1).unwrap();
-        let bboxes_nd = graph_rt.get_output(2).unwrap();
+        let bboxes_nd = graph_rt.get_output(1).unwrap();
+        let probs_nd = graph_rt.get_output(2).unwrap();
 
-        println!(
-            "output dtype {} {} {}",
-            labels_nd.dtype(),
-            scores_nd.dtype(),
-            bboxes_nd.dtype()
-        );
+        // println!(
+        //     "probs_nd shape is {:?}, len: {}, size: {}",
+        //     probs_nd.shape(),
+        //     probs_nd.len(),
+        //     probs_nd.size(),
+        // );
+        //
+        // println!(
+        //     "output dtype {} {} {}",
+        //     labels_nd.dtype(),
+        //     bboxes_nd.dtype(),
+        //     probs_nd.dtype(),
+        // );
 
-        let labels: Vec<f32> = labels_nd.to_vec::<f32>().unwrap();
+        let labels: Vec<i32> = labels_nd.to_vec::<i32>().unwrap();
         // println!("labels {:?}", labels);
-        let scores: Vec<f32> = scores_nd.to_vec::<f32>().unwrap();
-        // println!("scores {:?}", scores);
         let bboxes_flat: Vec<f32> = bboxes_nd.to_vec::<f32>().unwrap();
         // println!("bboxes_flat shape {}", bboxes_flat.len());
         let bboxes: Vec<Vec<f32>> = bboxes_flat.chunks(4).map(|x| x.to_vec()).collect();
         // println!("bboxes shape {}", bboxes.len());
-        let bboxes: Vec<Vec<f32>> = bboxes
-            .iter()
-            .map(|x| x.iter().map(|v| v / ratio).collect())
-            .collect();
+        // let bboxes: Vec<Vec<f32>> = bboxes
+        //     .iter()
+        //     .map(|x| x.iter().map(|v| v / ratio).collect())
+        //     .collect();
         // println!("bboxes shape {}", bboxes.len());
+        let probs: Vec<f32> = probs_nd.to_vec::<f32>().unwrap();
+        // println!("scores {:?}", scores);
 
         for (i, bbox) in bboxes.iter().enumerate() {
-            println!("score {}", scores[i]);
+            if probs[i] < 0.7 {
+                continue;
+            }
+            println!("probs {}", probs[i]);
             println!("label {}", labels[i]);
             println!("bbox {:?}", bbox);
-            // if scores[i] < 0.3 {
-            //     continue;
-            // }
             let rect = bbox2rect(bbox);
             let color = cv2::core::Scalar::new(255f64, 0f64, 0f64, -1f64);
             plot_rect_cv(&mut img_display, rect, color);

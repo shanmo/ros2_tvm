@@ -4,3 +4,4 @@ model/
 .pkl_memoize_py3
 resnet-50-v2-autotuning.json
 yolov5s.pt
+.idea/

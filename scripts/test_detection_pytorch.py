@@ -16,14 +16,24 @@ from torch.utils.data import DataLoader
 from detr import DETRdemo
 from tvm_funcs import get_tvm_model, tune, time_it
 
+import torch
+from torch import nn
+from torchvision.models import resnet50
+import torchvision.transforms as T
+torch.set_grad_enabled(False)
+
 class TraceWrapper(torch.nn.Module):
     def __init__(self, model):
         super().__init__()
         self.model = model
 
-    def forward(self, input):
-        out = self.model(input)
-        return out["pred_logits"], out["pred_boxes"]
+    def forward(self, img):
+        outputs = self.model(img)
+        labels = torch.argmax(outputs['pred_logits'], dim=2)
+        # print(f"labels {labels}")
+        # keep only predictions with 0.7+ confidence
+        probas = outputs['pred_logits'].softmax(-1)[0, :, :-1].max(-1).values
+        return labels, outputs['pred_boxes'], probas
 
 def get_model():
     detr = DETRdemo(num_classes=91)
@@ -42,7 +52,7 @@ def preprocess(image):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
     image -= MEAN
     image /= STD
-    image = cv2.resize(image, (512, 512))
+    image = cv2.resize(image, (848, 480))
     image = image.transpose(2, 0, 1)
     image = np.expand_dims(image, 0)
     return image
