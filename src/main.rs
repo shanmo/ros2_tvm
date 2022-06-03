@@ -36,7 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     spawner.spawn_local(async move {
         _camera_subscriber
             .for_each(|img: r2r::sensor_msgs::msg::Image| {
-                lib::detect(&img);
+                lib::process_image(&img);
                 future::ready(())
             })
             .await

@@ -3,6 +3,7 @@ use cv2::prelude::*;
 use ndarray as nd;
 use opencv as cv2;
 use tvm_rt as trt;
+use std::time::Instant;
 
 use opencv::dnn::print;
 use std::{
@@ -152,10 +153,137 @@ pub fn cv_bridge(img: &r2r::sensor_msgs::msg::Image) -> cv2::core::Mat {
     return mat_8u;
 }
 
-pub fn detect(img: &r2r::sensor_msgs::msg::Image) -> cv2::core::Mat {
+pub fn detect_objects(img: &cv2::core::Mat) -> cv2::core::Mat {
+    let mut img_display = img.clone();
+    let image_arr: nd::ArrayView3<u8> = img.try_as_array().unwrap();
+    let arr = preprocess(image_arr);
+
+    let now = Instant::now();
+    let dev = trt::Device::cpu(0);
+    let input =
+        trt::NDArray::from_rust_ndarray(&arr, dev, trt::DataType::float(32, 1)).unwrap();
+    // load the built module
+    let lib = trt::Module::load(&Path::new("./model/detection_lib.so")).unwrap();
+    let mut graph_rt = trt::graph_rt::GraphRt::from_module(lib, dev).unwrap();
+    graph_rt.set_input("input0", input).unwrap();
+    graph_rt.run().unwrap();
+    let elapsed = now.elapsed();
+    println!("Time elapsed for object detection: {:.2?} ns", elapsed);
+    println!("Frequcny for object detection: {:.2?}", 1.0/(elapsed.as_nanos() as f64 / 1e9));
+
+    // prepare to get the output
+    let labels_nd = graph_rt.get_output(0).unwrap();
+    let bboxes_nd = graph_rt.get_output(1).unwrap();
+    let probs_nd = graph_rt.get_output(2).unwrap();
+
+    let labels: Vec<i32> = labels_nd.to_vec::<i32>().unwrap();
+    // println!("labels {:?}", labels);
+    let bboxes_flat: Vec<f32> = bboxes_nd.to_vec::<f32>().unwrap();
+    // println!("bboxes_flat shape {}", bboxes_flat.len());
+    let bboxes: Vec<Vec<f32>> = bboxes_flat.chunks(4).map(|x| x.to_vec()).collect();
+    let probs: Vec<f32> = probs_nd.to_vec::<f32>().unwrap();
+
+    for (i, bbox) in bboxes.iter().enumerate() {
+        if probs[i] < 0.7 {
+            continue;
+        }
+        // println!("probs {}", probs[i]);
+        // println!("label {}", labels[i]);
+        // println!("bbox {:?}", bbox);
+        let rect = bbox2rect(bbox);
+        let color = cv2::core::Scalar::new(255f64, 0f64, 0f64, -1f64);
+        plot_rect_cv(&mut img_display, rect, color);
+    }
+
+    return img_display;
+}
+
+pub fn segment(img: &cv2::core::Mat) -> cv2::core::Mat {
+    let mut img_display = img.clone();
+
+    let mut reduced = img.clone();
+    cv2::imgproc::resize(
+        &img_display,
+        &mut reduced,
+        cv2::core::Size {
+            width: 512,
+            height: 256,
+        },
+        0.,
+        0.,
+        cv2::imgproc::INTER_LINEAR,
+    )
+        .unwrap();
+    let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
+    // println!("arr shape {:?}", image_arr.shape());
+    let arr = preprocess(image_arr);
+    // println!("input {:?}", arr);
+
+    let dev = trt::Device::cpu(0);
+
+    let input =
+        trt::NDArray::from_rust_ndarray(&arr, dev, trt::DataType::float(32, 1)).unwrap();
+
+    // load the built module
+    let lib = trt::Module::load(&Path::new("./model/segmentation_lib.so")).unwrap();
+    let mut graph_rt = trt::graph_rt::GraphRt::from_module(lib, dev).unwrap();
+    graph_rt.set_input("input0", input).unwrap();
+    let now = Instant::now();
+    graph_rt.run().unwrap();
+    let elapsed = now.elapsed();
+    println!("Time elapsed for image segmentation: {:.2?} ns", elapsed);
+    println!("Frequcny for segmentation: {:.2?}", 1.0/(elapsed.as_nanos() as f64 / 1e9));
+
+    // prepare to get the output
+    let output_nd = graph_rt.get_output(0).unwrap();
+
+    let output: Vec<i32> = output_nd.to_vec::<i32>().unwrap();
+    let output: Vec<u8> = output.iter().map(|&e| e as u8).collect();
+    // println!("{:?}", output);
+    let seg_mask = nd::Array::from_shape_vec((480, 848), output)
+        .unwrap()
+        .to_owned();
+
+    let color_map = nd::array![
+            [128,0,128],
+            [0,128,128],
+            [0,0,128],
+            [165,42,42],
+            [178,34,34],
+            [220,20,60],
+            [0,206,209],
+            [64,224,208],
+            [175,238,238],
+            [127,255,212],
+            [176,224,230],
+            [95,158,160],
+            [0, 0, 255],
+            [255, 255, 0],
+            [0, 255, 255],
+            [0,128,0],
+            [128,128,0],
+            [128,0,0],
+            [128,128,128],
+            [192,192,192],
+        ];
+
+    let img_display: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
+    let image_seg: nd::Array3<u8> = make_segmentation_visualisation_with_transparency(
+        &img_display.to_owned(),
+        &seg_mask,
+        &color_map,
+    );
+    let image_seg: cv2::core::Mat = ndarray3_to_cv2_8u(&image_seg);
+
+    return image_seg;
+}
+
+pub fn process_image(img: &r2r::sensor_msgs::msg::Image) -> cv2::core::Mat {
     let mat = cv_bridge(img);
-    cv2::highgui::imshow("kitti", &mat).unwrap();
-    cv2::highgui::wait_key(1).unwrap();
+    // let img_display = detect_objects(&mat);
+    let img_display = segment(&mat);
+    cv2::highgui::imshow("kitti", &img_display).unwrap();
+    cv2::highgui::wait_key(10).unwrap();
     return mat;
 }
 

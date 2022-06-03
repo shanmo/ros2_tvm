@@ -7,13 +7,21 @@
 - the image segmentation model is [unet](https://github.com/gasparian/multiclass-semantic-segmentation)
    - the script to generate the tvm graph is in `scripts/test_seg.py`
 
+## performance 
+
+- for cpu version `tigerlake`
+   - object detection takes about `478.95ms ns` per image, which is `2.06 Hz` 
+   - segmentation takes about `356.32ms ns` per image, which is `2.81 Hz` 
+
 ## demo 
 
 - object detection
 ![img](./assets/det.png)
+![img](./assets/det-demo.gif)
 
 - image segmentation
 ![img](./assets/seg.png)
+![img](./assets/seg-demo.gif)
 
 ## reference 
 

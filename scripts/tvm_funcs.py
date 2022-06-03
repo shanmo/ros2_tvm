@@ -8,7 +8,7 @@ from tvm import autotvm
 import numpy as np
 import torch
 
-TARGET = "llvm"
+TARGET = "llvm -mcpu=tigerlake"
 
 
 def time_it(model_func):
