@@ -280,8 +280,8 @@ pub fn segment(img: &cv2::core::Mat) -> cv2::core::Mat {
 
 pub fn process_image(img: &r2r::sensor_msgs::msg::Image) -> cv2::core::Mat {
     let mat = cv_bridge(img);
-    // let img_display = detect_objects(&mat);
-    let img_display = segment(&mat);
+    let img_display = detect_objects(&mat);
+    // let img_display = segment(&mat);
     cv2::highgui::imshow("kitti", &img_display).unwrap();
     cv2::highgui::wait_key(10).unwrap();
     return mat;
