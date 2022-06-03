@@ -4,12 +4,12 @@ use ndarray as nd;
 use opencv as cv2;
 use tvm_rt as trt;
 
+use opencv::dnn::print;
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
     path::Path,
 };
-use opencv::dnn::print;
 
 trait AsArray {
     fn try_as_array(&self) -> Result<nd::ArrayView3<u8>>;
@@ -32,7 +32,7 @@ pub fn ndarray2_to_cv_8u(a: &nd::Array2<u8>) -> cv2::core::Mat {
             std::mem::transmute(a.as_ptr()),
             cv2::core::Mat_AUTO_STEP,
         )
-            .unwrap()
+        .unwrap()
     }
 }
 
@@ -48,7 +48,7 @@ pub fn ndarray3_to_cv2_8u(data: &nd::Array3<u8>) -> cv2::core::Mat {
             std::mem::transmute(data.as_ptr()),
             cv2::core::Mat_AUTO_STEP,
         )
-            .unwrap()
+        .unwrap()
     }
 }
 
@@ -110,20 +110,46 @@ pub fn plot_rect_cv(
 }
 
 pub fn cv_bridge(img: &r2r::sensor_msgs::msg::Image) -> cv2::core::Mat {
-    let mut mat = cv2::core::Mat::zeros(480 as i32, 848 as i32, cv2::core::CV_32FC3).unwrap().to_mat().unwrap();
-    for i in 0..480 {
-        for j in 0..848 {
+    // kitti image size
+    const kw: i32 = 1242;
+    const kh: i32 = 375;
+
+    // realsense image size
+    const rw: i32 = 848;
+    const rh: i32 = 480;
+
+    let mut mat = cv2::core::Mat::zeros(kh, kw, cv2::core::CV_32FC3)
+        .unwrap()
+        .to_mat()
+        .unwrap();
+    for i in 0..kh {
+        for j in 0..kw {
             let mut pix = cv2::core::Vec3f::default();
-            pix[0] = img.data[((i + j*480)*3 + 0) as usize].into();
-            pix[1] = img.data[((i + j*480)*3 + 1) as usize].into();
-            pix[2] = img.data[((i + j*480)*3 + 2) as usize].into();
+            pix[0] = img.data[((i * kw + j) * 3 + 0) as usize].into();
+            pix[1] = img.data[((i * kw + j) * 3 + 1) as usize].into();
+            pix[2] = img.data[((i * kw + j) * 3 + 2) as usize].into();
             *mat.at_2d_mut(i, j).unwrap() = pix;
-            println!("pix {:?}", pix);
         }
     }
-    // let mut mat_8u = Mat::default();
-    // let mat = mat.convert_to(&mut mat_8u, cv2::core::CV_8UC3, 1., 0.).unwrap();
-    return mat;
+    let mut mat_8u = Mat::default();
+    mat.convert_to(&mut mat_8u, cv2::core::CV_8UC3, 1., 0.)
+        .unwrap();
+    let img_rgb = mat_8u.clone();
+
+    cv2::imgproc::resize(
+        &img_rgb,
+        &mut mat_8u,
+        cv2::core::Size {
+            width: rw,
+            height: rh,
+        },
+        0.,
+        0.,
+        cv2::imgproc::INTER_LINEAR,
+    )
+    .unwrap();
+
+    return mat_8u;
 }
 
 pub fn detect(img: &r2r::sensor_msgs::msg::Image) -> cv2::core::Mat {
@@ -165,7 +191,7 @@ mod tests {
             0.,
             cv2::imgproc::INTER_LINEAR,
         )
-            .unwrap();
+        .unwrap();
 
         let image_arr: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
         // println!("arr shape {:?}", image_arr.shape());
@@ -257,7 +283,7 @@ mod tests {
             0.,
             cv2::imgproc::INTER_LINEAR,
         )
-            .unwrap();
+        .unwrap();
         let img_display: nd::ArrayView3<u8> = img_display.try_as_array().unwrap();
 
         let mut reduced = img_rgb.clone();
@@ -272,7 +298,7 @@ mod tests {
             0.,
             cv2::imgproc::INTER_LINEAR,
         )
-            .unwrap();
+        .unwrap();
         let image_arr: nd::ArrayView3<u8> = reduced.try_as_array().unwrap();
         // println!("arr shape {:?}", image_arr.shape());
         let arr = preprocess(image_arr);

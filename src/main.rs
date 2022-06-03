@@ -15,12 +15,12 @@ use r2r::QosProfile;
 
 use tvm_rt as trt;
 
+use opencv::dnn::print;
 use std::{
     fs::{self, File},
     io::{BufRead, BufReader},
     path::Path,
 };
-use opencv::dnn::print;
 
 mod lib;
 
@@ -31,10 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pool = LocalPool::new();
     let spawner = pool.spawner();
 
-    let _camera_subscriber = node.subscribe(
-        "/kitti/image/color/left",
-        QosProfile::default(),
-    )?;
+    let _camera_subscriber = node.subscribe("/kitti/image/color/left", QosProfile::default())?;
 
     spawner.spawn_local(async move {
         _camera_subscriber
@@ -51,4 +48,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool.run_until_stalled();
     }
 }
-
