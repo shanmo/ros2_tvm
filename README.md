@@ -7,6 +7,12 @@
 - the image segmentation model is [unet](https://github.com/gasparian/multiclass-semantic-segmentation)
    - the script to generate the tvm graph is in `scripts/test_seg.py`
 
+## how to run 
+
+1. generate the models for tvm using the python scripts are in the `scripts` folder 
+2. `cargo run`
+3. run the [ROS2 kitti dataset publisher](https://github.com/shanmo/ros2_kitti) 
+
 ## performance 
 
 - for cpu version `tigerlake`
