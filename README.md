@@ -6,6 +6,7 @@
 
 - ubuntu 20.04, ROS2 galactic
 - [tvm](https://tvm.apache.org/)
+- pytorch
 
 ## how to run 
 
