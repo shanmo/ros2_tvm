@@ -2,6 +2,11 @@
 
 - this repo test the object detection and segmentation models with tvm in ROS2 
 
+## dependencies 
+
+- ubuntu 20.04, ROS2 galactic
+- [tvm](https://tvm.apache.org/)
+
 ## how to run 
 
 - the object detection model is [DETR](https://ai.facebook.com/blog/end-to-end-object-detection-with-transformers/) 
