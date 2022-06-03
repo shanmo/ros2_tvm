@@ -12,6 +12,7 @@ opencv = {version = "0.64.0", features = ["clang-runtime"]}
 tokio = { version = "0.3", features = ["full"] }
 ndarray = "0.15"
 anyhow = "1.0.57"
+futures = "0.3.19"
 
 tvm =  { path = "/home/sean/mylibs/tvm/rust/tvm" }
 tvm-rt =  { path = "/home/sean/mylibs/tvm/rust/tvm-rt" }

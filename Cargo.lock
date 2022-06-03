@@ -1806,6 +1806,7 @@ name = "ros2_tvm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "futures",
  "image",
  "ndarray",
  "opencv",

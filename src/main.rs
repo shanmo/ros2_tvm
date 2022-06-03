@@ -3,6 +3,16 @@ use cv2::prelude::*;
 use ndarray as nd;
 use opencv as cv2;
 
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::sleep;
+
+use futures::executor::LocalPool;
+use futures::future;
+use futures::stream::StreamExt;
+use futures::task::LocalSpawnExt;
+use r2r::QosProfile;
+
 use tvm_rt as trt;
 
 use std::{
@@ -10,6 +20,7 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
 };
+use opencv::dnn::print;
 
 trait AsArray {
     fn try_as_array(&self) -> Result<nd::ArrayView3<u8>>;
@@ -57,7 +68,7 @@ pub fn preprocess(img: nd::ArrayView3<u8>) -> nd::Array<f32, nd::IxDyn> {
     let std = vec![0.229, 0.224, 0.225];
 
     let mut arr = img.clone().mapv(|elem| (elem as f32) / 255.0);
-    for ((x, y, z), value) in arr.indexed_iter_mut() {
+    for ((_x, _y, z), value) in arr.indexed_iter_mut() {
         let temp = (value.clone() - avg[z]) / std[z];
         *value = temp;
     }
@@ -85,17 +96,6 @@ pub fn make_segmentation_visualisation_with_transparency(
 }
 
 /// convert the BoundingBox to rect in opencv
-// pub fn bbox2rect(bbox: &Vec<f32>) -> cv2::core::Rect {
-//     let rect = cv2::core::Rect {
-//         x: bbox[0] as i32,
-//         y: bbox[1] as i32,
-//         width: (bbox[2] - bbox[0]) as i32,
-//         height: (bbox[3] - bbox[1]) as i32,
-//     };
-//     rect
-// }
-
-/// convert the BoundingBox to rect in opencv
 pub fn bbox2rect(bbox: &Vec<f32>) -> cv2::core::Rect {
     let x1 = (bbox[0] - 0.5 * bbox[2]) * 848.0;
     let y1 = (bbox[1] - 0.5 * bbox[3]) * 480.0;
@@ -120,8 +120,32 @@ pub fn plot_rect_cv(
     let _ = cv2::imgproc::rectangle(image_vis, rect, color, THICKNESS, LINE_TYPE, SHIFT).unwrap();
 }
 
-fn main() {
-    println!("Hello, world!");
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let ctx = r2r::Context::create()?;
+    let mut node = r2r::Node::create(ctx, "camera_subscriber", "")?;
+    let mut pool = LocalPool::new();
+    let spawner = pool.spawner();
+
+    let _camera_subscriber = node.subscribe(
+        "/kitti/image/color/left",
+        QosProfile::default(),
+    )?;
+
+    spawner.spawn_local(async move {
+        _camera_subscriber
+            .for_each(|img: r2r::sensor_msgs::msg::CompressedImage| {
+                println!("received kitti image");
+                future::ready(())
+            })
+            .await
+    })?;
+
+    // loop indefinitely to ensure that the objects are not destroyed
+    loop {
+        node.spin_once(std::time::Duration::from_millis(100));
+        pool.run_until_stalled();
+    }
 }
 
 #[cfg(test)]
