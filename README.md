@@ -1,13 +1,20 @@
 ## about
 
 - this repo test the object detection and segmentation models with tvm in ROS2 
+
+## dependencies 
+
+- ubuntu 20.04, ROS2 galactic
+- [tvm](https://tvm.apache.org/)
+- pytorch
+
+## how to run 
+
 - the object detection model is [DETR](https://ai.facebook.com/blog/end-to-end-object-detection-with-transformers/) 
    - I tried many models from mxnet, tensorflow, and pytorch, DETR from pytorch is the only one what works correctly in tvm rust
    - the script to generate the tvm graph is in `scripts/test_detection_pytorch.py`
 - the image segmentation model is [unet](https://github.com/gasparian/multiclass-semantic-segmentation)
    - the script to generate the tvm graph is in `scripts/test_seg.py`
-
-## how to run 
 
 1. generate the models for tvm using the python scripts are in the `scripts` folder 
 2. `cargo run`
