@@ -168,8 +168,8 @@ pub fn detect_objects(img: &cv2::core::Mat) -> cv2::core::Mat {
     graph_rt.set_input("input0", input).unwrap();
     graph_rt.run().unwrap();
     let elapsed = now.elapsed();
-    println!("Time elapsed for object detection: {:.2?} ns", elapsed);
-    println!("Frequcny for object detection: {:.2?}", 1.0/(elapsed.as_nanos() as f64 / 1e9));
+    println!("Time elapsed for object detection: {:.2?}", elapsed);
+    println!("Frequency for object detection: {:.2?}", 1.0/(elapsed.as_nanos() as f64 / 1e9));
 
     // prepare to get the output
     let labels_nd = graph_rt.get_output(0).unwrap();
@@ -231,8 +231,8 @@ pub fn segment(img: &cv2::core::Mat) -> cv2::core::Mat {
     let now = Instant::now();
     graph_rt.run().unwrap();
     let elapsed = now.elapsed();
-    println!("Time elapsed for image segmentation: {:.2?} ns", elapsed);
-    println!("Frequcny for segmentation: {:.2?}", 1.0/(elapsed.as_nanos() as f64 / 1e9));
+    println!("Time elapsed for image segmentation: {:.2?}", elapsed);
+    println!("Frequency for segmentation: {:.2?}", 1.0/(elapsed.as_nanos() as f64 / 1e9));
 
     // prepare to get the output
     let output_nd = graph_rt.get_output(0).unwrap();

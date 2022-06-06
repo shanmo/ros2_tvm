@@ -16,8 +16,8 @@
 ## performance 
 
 - for cpu version `tigerlake`
-   - object detection takes about `478.95ms ns` per image, which is `2.06 Hz` 
-   - segmentation takes about `356.32ms ns` per image, which is `2.81 Hz` 
+   - object detection takes about `478.95 ms` per image, which is `2.06 Hz` 
+   - segmentation takes about `356.32 ms` per image, which is `2.81 Hz` 
 
 ## demo 
 
