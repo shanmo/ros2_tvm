@@ -8,7 +8,8 @@ from tvm import autotvm
 import numpy as np
 import torch
 
-TARGET = "llvm -mcpu=tigerlake"
+# TARGET = "llvm -mcpu=tigerlake"
+TARGET = tvm.target.cuda()
 
 
 def time_it(model_func):
